@@ -1,17 +1,15 @@
 import requests, time, random, re
+import datetime
 from itertools import cycle
 from string import ascii_lowercase as alphabet
 from bs4 import BeautifulSoup
 import pandas as pd 
-from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
 from fake_useragent import UserAgent
 from proxies import *
 
-NUM_CPU_CORES = 6
-MAX_PROCESSES = NUM_CPU_CORES
-BLOCKING_FACTOR = 0.9 # number between 0 and < 1 (1 = deadlock)
-MAX_THREADS = int(NUM_CPU_CORES / (1 - BLOCKING_FACTOR)) # IO intensive, so # threads can be greater than # cores
+MAX_PROCESSES = 10
+MAX_THREADS = 25 # IO intensive, so # threads can be greater than # cores
 
 """Asynchronous method: 
 ~4.52 seconds to get all fighter urls
@@ -172,7 +170,7 @@ def fetch_fighter_urls():
             fighter_urls.update(res)
 
 def async_scraping_tasks():
-    """Scrape stats from all fighter urls with asynchronous multithreading"""
+    """Scrape stats from all fighter urls"""
     for referer, urls in fighter_urls.items():
         with ThreadPool(MAX_THREADS) as p:
             tasks = [p.apply_async(parse_fighter_data, (url, referer)) for url in urls]
@@ -199,4 +197,5 @@ if __name__ == '__main__':
     df = pd.DataFrame(dict([ (k, pd.Series(v)) for k, v in fdata.items() ]))
 
     # Save data into csv
-    df.to_csv('fighter_stat_summary_2.csv', index=False)
+    datetime = datetime.datetime.now().strftime("%b-%d-%Y_%H:%M:%S")
+    df.to_csv(f"fighter_stat_summary{datetime}.csv", index=False)

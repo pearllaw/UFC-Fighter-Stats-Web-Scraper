@@ -199,4 +199,4 @@ if __name__ == '__main__':
 
     # Save data into csv
     datetime = datetime.datetime.now().strftime("%m-%d-%Y_%H:%M:%S")
-    df.to_csv(f"fighter_stat_summary_{datetime}.csv", index=False)
+    df.to_csv(f"fighter_stats_{datetime}.csv", index=False)

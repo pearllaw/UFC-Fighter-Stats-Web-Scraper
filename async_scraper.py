@@ -9,7 +9,7 @@ from fake_useragent import UserAgent
 from proxies import *
 
 MAX_PROCESSES = 10
-MAX_THREADS = 25 # IO intensive, so # threads can be greater than # cores
+MAX_THREADS = 25 
 
 """Asynchronous method: 
 ~4.52 seconds to get all fighter urls
@@ -61,11 +61,12 @@ def make_request(url, referer, tolerance=10):
             "User-Agent": UserAgent().random
         }
         dead_proxy_count = 0
+        proxy_pool = cycle(proxy_list)
         while dead_proxy_count < tolerance:
             if len(proxy_list) < 1:
                 get_proxy()
             # Iterate through proxy_list and assign next element from iterable to proxy
-            proxy = next(cycle(proxy_list))
+            proxy = next(proxy_pool)
             proxies = {
                 'http': 'http://' + proxy,
                 'https': 'https://' + proxy
@@ -165,15 +166,15 @@ def parse_fighter_urls(url):
 
 def fetch_fighter_urls():
     """Retrieve all fighter urls = { alphabet page url : all corresponding fighter urls }"""
-    with ThreadPool(MAX_PROCESSES) as p:
-        for res in p.map(parse_fighter_urls, urls):
+    with ThreadPool(MAX_PROCESSES) as tp:
+        for res in tp.map(parse_fighter_urls, urls):
             fighter_urls.update(res)
 
 def async_scraping_tasks():
     """Scrape stats from all fighter urls"""
     for referer, urls in fighter_urls.items():
-        with ThreadPool(MAX_THREADS) as p:
-            tasks = [p.apply_async(parse_fighter_data, (url, referer)) for url in urls]
+        with ThreadPool(MAX_THREADS) as tp:
+            tasks = [tp.apply_async(parse_fighter_data, args=(url, referer)) for url in urls]
             results = [t.get() for t in tasks]
 
 if __name__ == '__main__':
@@ -197,5 +198,5 @@ if __name__ == '__main__':
     df = pd.DataFrame(dict([ (k, pd.Series(v)) for k, v in fdata.items() ]))
 
     # Save data into csv
-    datetime = datetime.datetime.now().strftime("%b-%d-%Y_%H:%M:%S")
-    df.to_csv(f"fighter_stat_summary{datetime}.csv", index=False)
+    datetime = datetime.datetime.now().strftime("%m-%d-%Y_%H:%M:%S")
+    df.to_csv(f"fighter_stat_summary_{datetime}.csv", index=False)

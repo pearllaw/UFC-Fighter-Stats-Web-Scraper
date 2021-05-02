@@ -6,7 +6,7 @@ proxy_list = []
 
 # Get proxies from proxy table with Beautiful Soup 
 def get_proxy():
-    proxy_req = requests.get('https://www.sslproxies.org/')
+    proxy_req = requests.get('https://free-proxy-list.net/')
     soup = BeautifulSoup(proxy_req.text, 'lxml')
     proxy_table = soup.find(id='proxylisttable')
     # Insert each IP + port into proxies list

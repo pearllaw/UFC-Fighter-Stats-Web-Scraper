@@ -1,43 +1,25 @@
 import requests, time, random, re
 import datetime
-from itertools import cycle
 from string import ascii_lowercase as alphabet
-from bs4 import BeautifulSoup
+from itertools import cycle
+from bs4 import BeautifulSoup as bs
 import pandas as pd 
 from multiprocessing.pool import ThreadPool
+from tqdm import tqdm
 from fake_useragent import UserAgent
 from proxies import *
 
-MAX_PROCESSES = 10
-MAX_THREADS = 25 
+MAX_PROCESSES = 6
+MAX_THREADS = 10
 
 """Asynchronous method: 
 ~4.52 seconds to get all fighter urls
-~334.57 seconds to get all fighter stats"""
+~2576.96 seconds = (~43 mins) to get all fighter stats"""
 
 # Initialize data storage
 urls = []
 fighter_urls = {}
-fdata = {
-    'name': [],
-    'win': [],
-    'lose': [],
-    'draw': [],
-    'nc': [],
-    'height': [],
-    'weight': [],
-    'reach': [],
-    'stance': [],
-    'dob': [],
-    'slpm': [],
-    'str_acc': [],
-    'sapm': [],
-    'str_def': [],
-    'td_avg': [],
-    'td_acc': [],
-    'td_def': [],
-    'sub_avg': []
-}
+f_data = []
 
 class ProxyError(Exception):
     """Exception raised when proxy attempts exceeded"""
@@ -47,7 +29,7 @@ class ProxyError(Exception):
 
 def make_request(url, referer, tolerance=10):
     """Make request to each fighter page by rotating proxies & using random UA"""
-    with requests.Session() as req:
+    with requests.Session() as session:
         headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", 
             "Accept-Encoding": "gzip, deflate", 
@@ -63,8 +45,6 @@ def make_request(url, referer, tolerance=10):
         dead_proxy_count = 0
         proxy_pool = cycle(proxy_list)
         while dead_proxy_count < tolerance:
-            if len(proxy_list) < 1:
-                get_proxy()
             # Iterate through proxy_list and assign next element from iterable to proxy
             proxy = next(proxy_pool)
             proxies = {
@@ -73,7 +53,7 @@ def make_request(url, referer, tolerance=10):
             }
             try: 
                 # Send request 
-                response = req.get(url, headers=headers, proxies=proxies)
+                response = session.get(url, headers=headers, proxies=proxies)
                 if response.status_code == 200: 
                     return response
             except: 
@@ -85,118 +65,140 @@ def make_request(url, referer, tolerance=10):
         raise ProxyError(url=url, message="Burned through too many proxies")
 
 def parse_fighter_data(url, referer):
-    """Parse each fighter page to get summary stats"""
+    # Initialize f_stats dictionary
+    f_stats = dict.fromkeys(['Name', 'DOB', 'Win', 'Lose', 'Draw', 'NC', 'Height', 
+    'Weight', 'Reach', 'Stance', 'SLPM', 'Str_Acc', 'SAPM', 'Str_Def', 'TD_Avg', 
+    'TD_Acc', 'TD_Def', 'Sub_Avg', 'Fights'])
+    f_stats['Fights'] = []
+    # Make request
     r = make_request(url, referer)
-    soup = BeautifulSoup(r.text, 'lxml')
+    # Parse response
+    soup = bs(r.text, 'lxml')
     name = soup.find('span', class_='b-content__title-highlight').text.strip()
-    fdata['name'].append(name)
-
+    f_stats['Name'] = name
     record = soup.find('span', class_='b-content__title-record').text.strip()
     # Clean record data
     splitted = re.split('[-()NC]', record[8:])
     record_arr = list(filter(None, splitted))
     win = record_arr[0]
-    fdata['win'].append(win)
+    f_stats['Win'] = win
     lose = record_arr[1]
-    fdata['lose'].append(lose)
+    f_stats['Lose'] = lose
     draw = record_arr[2]
-    fdata['draw'].append(draw)
+    f_stats['Draw'] = draw
     nc = record_arr[3] if len(record_arr) == 4 else '0'
-    fdata['nc'].append(nc)
-    
+    f_stats['NC'] = nc
+
     fight_details = soup.find_all('li', class_='b-list__box-list-item')
     for fd in fight_details:
         keyword = fd.i.text.strip().lower()
         text = fd.i.next_sibling.strip()
         if keyword == 'height:':
-            height = text
-            fdata['height'].append(height)
+            f_stats['Height'] = text
         elif keyword == 'weight:':
-            weight = text
-            fdata['weight'].append(weight)
+            f_stats['Weight'] = text
         elif keyword == 'reach:':
-            reach = text
-            fdata['reach'].append(reach)
+            f_stats['Reach'] = text
         elif keyword == 'stance:': 
-            stance = text
-            fdata['stance'].append(stance)
+            f_stats['Stance'] = text
         elif keyword == 'dob:':
-            dob = text
-            fdata['dob'].append(dob)
+            f_stats['DOB'] = text
         elif keyword == 'slpm:':
-            slpm = text
-            fdata['slpm'].append(slpm)
+            f_stats['SLPM'] = text
         elif keyword == 'str. acc.:':
-            str_acc = text
-            fdata['str_acc'].append(str_acc)
+            f_stats['Str_Acc'] = text
         elif keyword == 'sapm:':
-            sapm = text
-            fdata['sapm'].append(sapm)
+            f_stats['SAPM'] = text
         elif keyword == 'str. def:':
-            str_def = text 
-            fdata['str_def'].append(str_def)
+            f_stats['Str_Def'] = text
         elif keyword == 'td avg.:':
-            td_avg = text 
-            fdata['td_avg'].append(td_avg)
+            f_stats['TD_Avg'] = text 
         elif keyword == 'td acc.:':
-            td_acc = text 
-            fdata['td_acc'].append(td_acc)
+            f_stats['TD_Acc'] = text
         elif keyword == 'td def.:':
-            td_def = text 
-            fdata['td_def'].append(td_def)
+            f_stats['TD_Def'] = text
         elif keyword == 'sub. avg.:':
-            sub_avg = text 
-            fdata['sub_avg'].append(sub_avg)
+            f_stats['Sub_Avg'] = text 
+
+    table_body = soup.find('tbody')
+    for row in table_body.find_all('tr', 'b-fight-details__table-row'):
+        event = dict()
+        future_event = row.find_all('td')[0].i.i.text == 'next'
+        if not future_event:
+            event['Event'] = row.find_all('td')[6].p.a.text.strip()
+            event['Date'] = row.find_all('td')[6].p.findNextSibling('p').text.strip()
+            event['W/L'] = row.find_all('td')[0].i.i.text
+            event['Opponent'] = row.find_all('td')[1].p.findNextSibling('p').a.text.strip()
+            event['KD'] = row.find_all('td')[2].p.text.strip() # kd = knockdowns
+            event['Opp_KD'] = row.find_all('td')[2].p.findNextSibling('p').text.strip()
+            event['Str'] = row.find_all('td')[3].p.text.strip() # str = significant strikes
+            event['Opp_Str'] = row.find_all('td')[3].p.findNextSibling('p').text.strip()
+            event['TD'] = row.find_all('td')[4].p.text.strip() # td = takedowns
+            event['Opp_TD'] = row.find_all('td')[4].p.findNextSibling('p').text.strip()
+            event['Sub'] = row.find_all('td')[5].p.text.strip() # sub = submission attempts
+            event['Opp_Sub'] = row.find_all('td')[5].p.findNextSibling('p').text.strip()
+            event['Method'] = row.find_all('td')[7].p.text.strip()
+            event['Round'] = row.find_all('td')[8].p.text.strip()
+            event['Time'] = row.find_all('td')[9].p.text.strip()
+            f_stats['Fights'].append(event)
+    # Append fighter stats into f_data list
+    f_data.append(f_stats)
 
 def parse_fighter_urls(url):
-    """Parse alphabetical page to get each fighter's url"""
-    r = requests.get(url)
-    # Throw exception if status code is not 200
+    # Make request
     try:
+        r = requests.get(url) 
         r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        return "Exception: " + e
+        raise SystemExit(e)   
     # Create Beautiful Soup object that takes HTML content and parser
-    soup = BeautifulSoup(r.text, 'lxml')
-    # Extract individual fighter urls into fighter_urls
+    soup = bs(r.text, 'lxml')
+    # Parse and return each fighter url from alphabetical page url
     links = soup.select('a.b-link')
     hrefs = [l['href'] for l in links]
     unique_links = list(set(hrefs))
     return {url : unique_links}
 
 def fetch_fighter_urls():
-    """Retrieve all fighter urls = { alphabet page url : all corresponding fighter urls }"""
-    with ThreadPool(MAX_PROCESSES) as tp:
-        for res in tp.map(parse_fighter_urls, urls):
-            fighter_urls.update(res)
+    """Retrieve all fighter urls = {alphabet page url : all corresponding fighter urls}"""
+    with ThreadPool(processes=MAX_PROCESSES) as tp:
+        for res in [tp.apply_async(parse_fighter_urls, (url, )) for url in urls]:
+            fighter_urls.update(res.get())
 
 def async_scraping_tasks():
     """Scrape stats from all fighter urls"""
+    start = time.time()
     for referer, urls in fighter_urls.items():
-        with ThreadPool(MAX_THREADS) as tp:
-            tasks = [tp.apply_async(parse_fighter_data, args=(url, referer)) for url in urls]
-            results = [t.get() for t in tasks]
-
-if __name__ == '__main__':
+        # Get new list of proxies if iteration time >= 10 minutes
+        if int(time.time() - start) >= 600: 
+            get_proxy()
+            start = time.time()
+        with tqdm(total=len(urls)) as pbar:
+            with ThreadPool(processes=MAX_THREADS) as tp:
+                def callback(*args):
+                    pbar.update()
+                    return
+                results = [tp.apply_async(parse_fighter_data, args=(url, referer), callback=callback) for url in urls]
+                results = [r.get() for r in results]
+    
+if __name__ == '__main__':  
     # Fetch all page urls by alphabet
     urls = [f"http://ufcstats.com/statistics/fighters?char={ch}&page=all" for ch in alphabet]
-    
     # Populate list of proxies 
     get_proxy()
     
-    t0 = time.time()
+    now = time.time()
     fetch_fighter_urls()
-    t1 = time.time()
-    print(f"{t1-t0} seconds to get all fighter urls")
-   
-    t0 = time.time()
+    print(f"{time.time() - now} seconds to get all fighter urls")
+    
+    now = time.time()
     async_scraping_tasks()
-    t1 = time.time()
-    print(f"{t1-t0} seconds to get all fighter stats")
+    print(f"{time.time() - now} seconds to get all fighter stats")
 
-    # Place fdata dictionary object into DataFrame
-    df = pd.DataFrame(dict([ (k, pd.Series(v)) for k, v in fdata.items() ]))
-
+    # Create DataFrame from fdata dictionary 
+    df = pd.DataFrame(f_data)
+    df1 = pd.concat([pd.DataFrame(x) for x in df['Fights']], keys=df.index).reset_index(level=1, drop=True)
+    df = df.drop('Fights', axis=1).join(df1)
     # Save data into csv
     datetime = datetime.datetime.now().strftime("%m-%d-%Y_%H:%M:%S")
     df.to_csv(f"fighter_stats_{datetime}.csv", index=False)

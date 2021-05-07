@@ -1,13 +1,12 @@
-import requests, time, random, re
+import requests, time, re
 import datetime
 from string import ascii_lowercase as alphabet
-from itertools import cycle
-from bs4 import BeautifulSoup as bs
-import pandas as pd 
 from multiprocessing.pool import ThreadPool
+import pandas as pd 
+from bs4 import BeautifulSoup as bs
 from tqdm import tqdm
-from fake_useragent import UserAgent
 from proxies import *
+from rotate_requests import * 
 
 MAX_PROCESSES = 6
 MAX_THREADS = 10
@@ -21,54 +20,12 @@ urls = []
 fighter_urls = {}
 f_data = []
 
-class ProxyError(Exception):
-    """Exception raised when proxy attempts exceeded"""
-    def __init__(self, url, message):
-        self.url = url
-        self.message = message 
-
-def make_request(url, referer, tolerance=10):
-    """Make request to each fighter page by rotating proxies & using random UA"""
-    with requests.Session() as session:
-        headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9", 
-            "Accept-Encoding": "gzip, deflate", 
-            "Accept-Language": "en-US,en;q=0.9", 
-            "Cache-Control": "max-age=0",
-            "Connection": "keep-alive",
-            "DNT": "1", 
-            "Host": "ufcstats.com", 
-            "Referer": referer,
-            "Upgrade-Insecure-Requests": "1",
-            "User-Agent": UserAgent().random
-        }
-        dead_proxy_count = 0
-        proxy_pool = cycle(proxy_list)
-        while dead_proxy_count < tolerance:
-            # Iterate through proxy_list and assign next element from iterable to proxy
-            proxy = next(proxy_pool)
-            proxies = {
-                'http': 'http://' + proxy,
-                'https': 'https://' + proxy
-            }
-            try: 
-                # Send request 
-                response = session.get(url, headers=headers, proxies=proxies)
-                if response.status_code == 200: 
-                    return response
-            except: 
-                # Retry with different proxy  
-                dead_proxy_count += 1
-            else: 
-                # Delay scraping for 1-3 sec if status code is not 200, but proxy is not dead
-                time.sleep(random.randint(1, 3))
-        raise ProxyError(url=url, message="Burned through too many proxies")
-
 def parse_fighter_data(url, referer):
     # Initialize f_stats dictionary
-    f_stats = dict.fromkeys(['Name', 'DOB', 'Win', 'Lose', 'Draw', 'NC', 'Height', 
-    'Weight', 'Reach', 'Stance', 'SLPM', 'Str_Acc', 'SAPM', 'Str_Def', 'TD_Avg', 
-    'TD_Acc', 'TD_Def', 'Sub_Avg', 'Fights'])
+    keys = ('Name', 'DOB', 'Win', 'Lose', 'Draw', 'NC', 'Height', 'Weight', 'Reach', 
+    'Stance', 'SLPM', 'Str_Acc', 'SAPM', 'Str_Def', 'TD_Avg', 'TD_Acc', 'TD_Def', 
+    'Sub_Avg', 'Fights')
+    f_stats = dict.fromkeys(keys)
     f_stats['Fights'] = []
     # Make request
     r = make_request(url, referer)
@@ -154,10 +111,14 @@ def parse_fighter_urls(url):
     # Create Beautiful Soup object that takes HTML content and parser
     soup = bs(r.text, 'lxml')
     # Parse and return each fighter url from alphabetical page url
-    links = soup.select('a.b-link')
-    hrefs = [l['href'] for l in links]
-    unique_links = list(set(hrefs))
-    return {url : unique_links}
+    table_body = soup.select('tbody tr')
+    links = []
+    for row in table_body:
+        a_tags = row.select('a')
+        if len(a_tags) > 1:
+            link = a_tags[0].get('href')
+            links.append(link)
+    return {url : links}
 
 def fetch_fighter_urls():
     """Retrieve all fighter urls = {alphabet page url : all corresponding fighter urls}"""
@@ -189,16 +150,16 @@ if __name__ == '__main__':
     
     now = time.time()
     fetch_fighter_urls()
-    print(f"{time.time() - now} seconds to get all fighter urls")
+    print(f"{time.time() - now} seconds to scrape all fighter urls")
     
     now = time.time()
     async_scraping_tasks()
-    print(f"{time.time() - now} seconds to get all fighter stats")
+    print(f"{time.time() - now} seconds to scrape all fighter stats")
 
     # Create DataFrame from fdata dictionary 
     df = pd.DataFrame(f_data)
     df1 = pd.concat([pd.DataFrame(x) for x in df['Fights']], keys=df.index).reset_index(level=1, drop=True)
-    df = df.drop('Fights', axis=1).join(df1)
+    df = df.drop(columns='Fights').join(df1)
     # Save data into csv
     datetime = datetime.datetime.now().strftime("%m-%d-%Y_%H:%M:%S")
-    df.to_csv(f"fighter_stats_{datetime}.csv", index=False)
+    df.to_csv(f"csv/fighter_stats_{datetime}.csv", index=False)

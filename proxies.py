@@ -15,6 +15,4 @@ def get_proxy():
         port = row.find_all('td')[1].text
         proxy = "{ip}:{port}".format(ip=ip, port=port)
         proxy_list.append(proxy)
-        
-
 

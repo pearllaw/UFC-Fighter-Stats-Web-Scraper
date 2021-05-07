@@ -9,6 +9,10 @@ from rotate_requests import *
 
 MAX_THREADS = 10
 
+"""Asynchronous method: 
+~1.22 seconds to scrape all event urls
+~36.10 seconds to scrape all event data"""
+
 completed_events_url = "http://ufcstats.com/statistics/events/completed?page=all"
 event_urls = []
 events = [] 

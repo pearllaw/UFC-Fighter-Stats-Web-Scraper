@@ -161,5 +161,5 @@ if __name__ == '__main__':
     df1 = pd.concat([pd.DataFrame(x) for x in df['Fights']], keys=df.index).reset_index(level=1, drop=True)
     df = df.drop(columns='Fights').join(df1)
     # Save data into csv
-    datetime = datetime.datetime.now().strftime("%m-%d-%Y_%H:%M:%S")
+    datetime = datetime.datetime.now().strftime("%m-%d-%Y")
     df.to_csv(f"csv/fighter_stats_{datetime}.csv", index=False)

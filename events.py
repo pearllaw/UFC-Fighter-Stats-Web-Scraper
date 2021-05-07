@@ -78,4 +78,5 @@ if __name__ == '__main__':
     df = pd.DataFrame(events) 
     fights_df = pd.concat([pd.DataFrame(x) for x in df['Fights']], keys=df.index).reset_index(level=1, drop=True)
     df = df.drop(columns='Fights').join(fights_df)
-    df.to_csv("csv/ufc_events.csv", index=False)
+    datetime = datetime.datetime.now().strftime("%m-%d-%Y")
+    df.to_csv("csv/ufc_events_{datetime}.csv", index=False)

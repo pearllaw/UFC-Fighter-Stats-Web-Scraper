@@ -17,4 +17,4 @@ pip install -r requirements.txt
 
 ## Additional Work
 - Raw data collected and exported as .csv files were loaded into R for data cleaning. Refer to data_cleaning.R for full code. 
-- Data exploration and insights are summarized [here](http://rpubs.com/pearllaw/ufcdatavisualization){:target="_blank"}. Refer to visualizations folder for full code.
+- Data exploration and insights are summarized <a href="http://rpubs.com/pearllaw/ufcdatavisualization" target="_blank">here</a>. Refer to visualizations folder for full code.

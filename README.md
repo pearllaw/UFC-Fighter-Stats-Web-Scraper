@@ -1,5 +1,5 @@
 # UFC-Fighter-Stats-Web-Scraper
-An efficient, web scraper tool that utilizes asynchronous programming and multithreading to extract statistical data from 3629 UFC fighters (total count as of 4/29/21) from http://ufcstats.com/.
+An efficient, web scraper tool to extract statistical data from 3629 UFC fighters (total count as of 4/29/21) from http://ufcstats.com/. Implemented asynchronous programming and multithreading techniques to improve speed performance by almost 5x compared to initial synchronous execution. 
 
 ## Technologies
 - Python
